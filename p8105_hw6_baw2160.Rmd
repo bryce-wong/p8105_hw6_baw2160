@@ -1,0 +1,14 @@
+---
+title: "p8105_hw6_baw2160"
+author: "Bryce Wong"
+date: "November 18, 2018"
+output: github_document
+---
+
+```{r}
+library(tidyverse)
+#library(patchwork)
+
+theme_set(theme_bw() + theme(legend.position = "bottom")
+```
+
