@@ -59,20 +59,33 @@ baltimore_glm
 
 * Now run glm for each of the cities in your dataset, and extract the adjusted odds ratio (and CI) for solving homicides comparing black victims to white victims. 
     * Do this within a “tidy” pipeline, making use of purrr::map, list columns, and unnest as necessary to create a dataframe with estimated ORs and CIs for each city.
+    
+redoing cleaning for hom_data without making victim_race only 2 categories:
+
+```{r}
+hom_data_race = hom_data %>% 
+  mutate(city_state = str_c(city, ", ", state)) %>% 
+  filter(!(city_state %in% c("Dallas, TX", "Phoenix, AZ", "Kansas City, MO", "Tulsa, AL"))) %>% 
+  mutate(resolved = as.numeric(disposition == "Closed by arrest"),
+         victim_age = as.numeric(victim_age),
+         victim_race = fct_relevel(victim_race, "White")) %>% 
+  select(city_state, resolved, victim_age, victim_race, disposition, everything()) 
+```
+
 
 ```{r}
 glm_function = function(data, name){
   city_state_glm = data %>% 
-  unnest() %>% 
   filter(city_state == name) %>% 
-  glm(resolved ~ victim_age + victim_race + victim_sex, data = ., family = binomial()) %>% 
+  unnest() %>% 
+  glm(resolved ~ victim_race, data = ., family = binomial()) %>% 
   broom::tidy(conf.int = TRUE) %>% 
   mutate(
     OR = exp(estimate),
     OR_conf.low = exp(conf.low),
     OR_conf.high = exp(conf.high)
     ) %>%
-  filter(term == "victim_racenon-white") %>% 
+  filter(term == "victim_raceBlack") %>% 
   select(term, log_OR = estimate, OR, OR_conf.low, OR_conf.high, p.value)
   
   city_state_glm
@@ -80,14 +93,31 @@ glm_function = function(data, name){
 ```
 
 ```{r}
-all_cities_glm = hom_data_tidied %>% 
+all_cities_glm = hom_data_race %>% 
   nest(resolved:lon) %>% 
   mutate(
-    models = map(.x = city_state, ~glm_function(data = hom_data_tidied, name = .x))
+    models = map(.x = city_state, ~glm_function(data = hom_data_race, name = .x))
     ) %>% 
   select(city_state, models) %>% 
   unnest()
 
-#glm_function(data = hom_data_tidied, name = "Baltimore, MD")
+#glm_function(data = hom_data_race, name = "Baltimore, MD")
+```
+
+* Create a plot that shows the estimated ORs and CIs for each city. 
+* Organize cities according to estimated OR, and comment on the plot.
+
+```{r}
+all_cities_glm %>%
+  mutate(city_state = fct_reorder(city_state, OR)) %>% 
+  ggplot(aes(x = city_state, y = OR)) + 
+  geom_point() +
+  geom_errorbar(aes(x = city_state, ymin = OR_conf.high, ymax = OR_conf.low)) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5, size = 6)) +
+  labs(
+    title = "Odds ratio for solving homicides comparing black to white victims",
+    x = "City",
+    y = "Odds Ratio"
+  )
 ```
 
