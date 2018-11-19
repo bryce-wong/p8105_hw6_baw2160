@@ -59,3 +59,35 @@ baltimore_glm
 
 * Now run glm for each of the cities in your dataset, and extract the adjusted odds ratio (and CI) for solving homicides comparing black victims to white victims. 
     * Do this within a “tidy” pipeline, making use of purrr::map, list columns, and unnest as necessary to create a dataframe with estimated ORs and CIs for each city.
+
+```{r}
+glm_function = function(data, name){
+  city_state_glm = data %>% 
+  unnest() %>% 
+  filter(city_state == name) %>% 
+  glm(resolved ~ victim_age + victim_race + victim_sex, data = ., family = binomial()) %>% 
+  broom::tidy(conf.int = TRUE) %>% 
+  mutate(
+    OR = exp(estimate),
+    OR_conf.low = exp(conf.low),
+    OR_conf.high = exp(conf.high)
+    ) %>%
+  filter(term == "victim_racenon-white") %>% 
+  select(term, log_OR = estimate, OR, OR_conf.low, OR_conf.high, p.value)
+  
+  city_state_glm
+}
+```
+
+```{r}
+all_cities_glm = hom_data_tidied %>% 
+  nest(resolved:lon) %>% 
+  mutate(
+    models = map(.x = city_state, ~glm_function(data = hom_data_tidied, name = .x))
+    ) %>% 
+  select(city_state, models) %>% 
+  unnest()
+
+#glm_function(data = hom_data_tidied, name = "Baltimore, MD")
+```
+
