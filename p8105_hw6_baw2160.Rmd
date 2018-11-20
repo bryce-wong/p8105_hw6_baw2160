@@ -69,6 +69,7 @@ hom_data_race = hom_data %>%
   mutate(resolved = as.numeric(disposition == "Closed by arrest"),
          victim_age = as.numeric(victim_age),
          victim_race = fct_relevel(victim_race, "White")) %>% 
+  filter(!is.na(victim_age)) %>% 
   select(city_state, resolved, victim_age, victim_race, disposition, everything()) 
 ```
 
@@ -78,7 +79,7 @@ glm_function = function(data, name){
   city_state_glm = data %>% 
   filter(city_state == name) %>% 
   unnest() %>% 
-  glm(resolved ~ victim_race, data = ., family = binomial()) %>% 
+  glm(resolved ~ victim_race + victim_age + victim_sex, data = ., family = binomial()) %>% 
   broom::tidy(conf.int = TRUE) %>% 
   mutate(
     OR = exp(estimate),
@@ -119,5 +120,33 @@ all_cities_glm %>%
     x = "City",
     y = "Odds Ratio"
   )
+```
+
+###Problem 2:
+
+Load data:
+
+```{r}
+birthweight_data = read_csv("./data/birthweight.csv")
+```
+
+Clean data:
+
+```{r}
+birthweight_data = birthweight_data %>% 
+  mutate(
+    babysex = as.factor(babysex),
+    frace = as.factor(frace),
+    malform = as.factor(malform),
+    mrace = as.factor(mrace)
+  ) %>% 
+  filter(complete.cases(.))
+```
+
+* Propose a regression model for birthweight. This model may be based on a hypothesized structure for the factors that underly birthweight, on a data-driven model-building process, or a combination of the two. 
+* Describe your modeling process and show a plot of model residuals against fitted values – use add_predictions and add_residuals in making this plot.
+
+```{r}
+birthweight_model = lm(bwt ~ babysex + blength + delwt + fincome + frace + gaweeks + malform + mrace + pnumlbw + pnumsga + ppbmi + ppwt + smoken + wtgain, data = birthweight_data)
 ```
 
