@@ -149,9 +149,9 @@ birthweight_data = birthweight_data %>%
 Started with all predictors in the model:
 
 ```{r}
-birthweight_model = lm(bwt ~ babysex + bhead + blength + delwt + fincome + frace + gaweeks + malform + menarche + mheight + momage + mrace + parity + pnumlbw + pnumsga + ppbmi + ppwt + smoken + wtgain, data = birthweight_data)
+birthweight_full = lm(bwt ~ babysex + bhead + blength + delwt + fincome + frace + gaweeks + malform + menarche + mheight + momage + mrace + parity + pnumlbw + pnumsga + ppbmi + ppwt + smoken + wtgain, data = birthweight_data)
 
-birthweight_model %>% 
+birthweight_full_tidy = birthweight_full %>% 
   broom::tidy() %>% 
   select(term, estimate, p.value) %>% 
   knitr::kable(digits = 3)
@@ -176,10 +176,49 @@ N/A - might mean these variables aren't linearly independent:
 * wtgain
 
 ```{r}
-birthweight_model = lm(bwt ~ babysex + bhead + blength + delwt + gaweeks + mrace, data = birthweight_data)
+birthweight_2 = lm(bwt ~ babysex + bhead + blength + delwt + gaweeks + mrace, data = birthweight_data)
 
-birthweight_model %>% 
+birthweight_2_tidy = birthweight_2 %>% 
   broom::tidy() %>% 
   select(term, estimate, p.value) %>% 
   knitr::kable(digits = 3)
 ```
+
+Adding back in variables I think make theoretical sense:
+* smoken
+* ppwt
+* ppbmi
+
+```{r}
+birthweight_3 = lm(bwt ~ babysex + bhead + blength + delwt + gaweeks + mrace + smoken + ppbmi, data = birthweight_data)
+
+birthweight_3_tidy = birthweight_3 %>% 
+  broom::tidy() %>% 
+  select(term, estimate, p.value) %>% 
+  knitr::kable(digits = 3)
+```
+
+ppbmi and ppwt seem to not be significant when the other is in the model. I'm considering ppbmi more important.
+
+Comparing nested models - the full to the new one:
+
+```{r}
+anova(birthweight_3, birthweight_full) %>% 
+  broom::tidy()
+```
+
+```{r}
+birthweight_data %>% 
+  modelr::add_residuals(birthweight_3) %>% 
+  ggplot(aes(x = mrace, y = resid)) + geom_point()
+
+birthweight_data %>% 
+  modelr::add_residuals(birthweight_3) %>% 
+  ggplot(aes(x = smoken, y = resid)) + geom_point()
+
+birthweight_data %>% 
+  modelr::add_predictions(birthweight_3) %>% 
+  ggplot(aes(x = bwt, y = residuals)) + geom_point() + 
+  geom_line(aes(y = pred), color = "red")
+```
+
