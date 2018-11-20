@@ -210,15 +210,9 @@ anova(birthweight_3, birthweight_full) %>%
 ```{r}
 birthweight_data %>% 
   modelr::add_residuals(birthweight_3) %>% 
-  ggplot(aes(x = mrace, y = resid)) + geom_point()
-
-birthweight_data %>% 
-  modelr::add_residuals(birthweight_3) %>% 
-  ggplot(aes(x = smoken, y = resid)) + geom_point()
-
-birthweight_data %>% 
   modelr::add_predictions(birthweight_3) %>% 
-  ggplot(aes(x = bwt, y = residuals)) + geom_point() + 
+  ggplot(aes(x = bwt, y = resid)) +  
+  geom_point() + 
   geom_line(aes(y = pred), color = "red")
 ```
 
