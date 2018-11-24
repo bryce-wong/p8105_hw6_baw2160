@@ -7,9 +7,11 @@ output: github_document
 
 ```{r}
 library(tidyverse)
-#library(patchwork)
+library(modelr)
+library(mgcv)
 
 theme_set(theme_bw() + theme(legend.position = "bottom"))
+set.seed(1)
 ```
 
 ### Problem 1:
@@ -141,6 +143,8 @@ birthweight_full_tidy = birthweight_full %>%
   broom::tidy() %>% 
   select(term, estimate, p.value) %>% 
   knitr::kable(digits = 3)
+
+birthweight_full_tidy
 ```
 
 Doesn't seem useful:
@@ -202,8 +206,13 @@ birthweight_data %>%
   modelr::add_residuals(birthweight_3) %>% 
   modelr::add_predictions(birthweight_3) %>% 
   ggplot(aes(x = bwt, y = resid)) +  
-  geom_point() + 
-  geom_line(aes(y = pred), color = "red")
+  geom_point() +
+  geom_line(aes(y = pred), color = "red") +
+  labs(
+    title = "Predictions and Residuals",
+    x = "Birthweight",
+    y = "Predictions and Residuals"
+  )
 ```
 
 Compare your model to two others:
@@ -212,3 +221,29 @@ Compare your model to two others:
 * One using head circumference, length, sex, and all interactions (including the three-way interaction) between these
 
 Make this comparison in terms of the cross-validated prediction error; use crossv_mc and functions in purrr as appropriate.
+
+```{r}
+cv_birthweight = crossv_mc(birthweight_data, 100)
+
+cv_birthweight = 
+  cv_birthweight %>% 
+  mutate(
+    proposed_mod = map(train, ~lm(bwt ~ babysex + bhead + blength + delwt + gaweeks + mrace + smoken + ppbmi, data = .x)),
+    length_ga_mod = map(train, ~lm(bwt ~ blength + gaweeks, data = .x)),
+    circ_length_sex_mod = map(train, ~lm(bwt ~ bhead * blength * babysex, data = .x))) %>% 
+  mutate(
+    rmse_proposed = map2_dbl(proposed_mod, test, ~rmse(model = .x, data = .y)),
+    rmse_length_ga = map2_dbl(length_ga_mod, test, ~rmse(model = .x, data = .y)),
+    rmse_circ_length_sex = map2_dbl(circ_length_sex_mod, test, ~rmse(model = .x, data = .y)))
+```
+
+```{r}
+cv_birthweight %>% 
+  select(starts_with("rmse")) %>% 
+  gather(key = model, value = rmse) %>% 
+  mutate(model = str_replace(model, "rmse_", ""),
+         model = fct_inorder(model)) %>% 
+  ggplot(aes(x = model, y = rmse)) + geom_violin()
+```
+
+
