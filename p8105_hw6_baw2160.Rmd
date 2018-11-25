@@ -25,6 +25,7 @@ Loading the data:
 * Create a city_state variable (e.g. “Baltimore, MD”), and a binary variable indicating whether the homicide is solved. 
 * Omit cities Dallas, TX; Phoenix, AZ; and Kansas City, MO – these don’t report victim race. Also omit Tulsa, AL – this is a data entry mistake. 
 * Modifiy victim_race to have categories white and non-white, with white as the reference category. 
+    * All "unknown" values are "non-white" values with the recoding
 * Be sure that victim_age is numeric.
 
 ```{r}
@@ -59,7 +60,7 @@ baltimore_glm =
 baltimore_glm
 ```
 
-* Now run glm for each of the cities in your dataset, and extract the adjusted odds ratio (and CI) for solving homicides comparing black victims to white victims. 
+* Now run glm for each of the cities in your dataset, and extract the adjusted odds ratio (and CI) for solving homicides comparing non-white victims to white victims. 
     * Do this within a “tidy” pipeline, making use of purrr::map, list columns, and unnest as necessary to create a dataframe with estimated ORs and CIs for each city.
 
 ```{r}
@@ -89,8 +90,6 @@ all_cities_glm = hom_data_tidied %>%
     ) %>% 
   select(city_state, models) %>% 
   unnest()
-
-#glm_function(data = hom_data_race, name = "Baltimore, MD")
 ```
 
 * Create a plot that shows the estimated ORs and CIs for each city. 
@@ -104,11 +103,15 @@ all_cities_glm %>%
   geom_errorbar(aes(x = city_state, ymin = OR_conf.high, ymax = OR_conf.low)) +
   theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5, size = 6)) +
   labs(
-    title = "Odds ratio for solving homicides comparing black to white victims",
+    title = "Odds ratio for solving homicides comparing non-white to white victims",
     x = "City",
     y = "Odds Ratio"
   )
 ```
+
+We can see from this plot that the city with the highest odds ratio for solving homicides comparing non-white to white victims is Tampa, FL, and the city with the lowest odds ratio for solving homicides with this same comparison is Boston, MA.
+
+Most cities seem to have roughly the same odds ratio, as all points are on a roughly flat line. The error bars do seem to vary widely, however. On the whole, most odds ratios are below 1, indicating that the odds of solving homicides with non-white victims is often lower than the odds of solving homicides with white victims. 
 
 ###Problem 2:
 
@@ -130,10 +133,7 @@ birthweight_data = birthweight_data %>%
   ) 
 ```
 
-* Propose a regression model for birthweight. This model may be based on a hypothesized structure for the factors that underly birthweight, on a data-driven model-building process, or a combination of the two. 
-* Describe your modeling process and show a plot of model residuals against fitted values – use add_predictions and add_residuals in making this plot.
-
-Started with all predictors in the model:
+I begin building a proposed regression model for birthweight by starting with all predictors in the model:
 
 ```{r}
 birthweight_full = lm(bwt ~ babysex + bhead + blength + delwt + fincome + frace + gaweeks + malform + menarche + mheight + momage + mrace + parity + pnumlbw + pnumsga + ppbmi + ppwt + smoken + wtgain, data = birthweight_data)
@@ -146,7 +146,7 @@ birthweight_full_tidy = birthweight_full %>%
 birthweight_full_tidy
 ```
 
-Doesn't seem useful:
+Here are the variables that weren't statistically significant when they were a part of the full model:
 * fincome
 * frace2-frace8 (missing frace5-7)
 * malform1
@@ -164,6 +164,8 @@ N/A - might mean these variables aren't linearly independent:
 * pnumsga
 * wtgain
 
+I removed these variables and fit a new regression model:
+
 ```{r}
 birthweight_2 = lm(bwt ~ babysex + bhead + blength + delwt + gaweeks + mrace, data = birthweight_data)
 
@@ -175,13 +177,20 @@ birthweight_2_tidy = birthweight_2 %>%
 birthweight_2_tidy
 ```
 
-Adding back in variables I think make theoretical sense:
+I decided to then add back in variables I think make theoretical sense:
 * smoken
 * ppwt
 * ppbmi
 
+Looking at ppbmi and ppwt, each seems to not be significant when the other is in the model. I'm considering ppbmi more important, so I remove ppwt from the model.
+
+Testing for possible interactions:
+* head circumference with length at birth
+* delivery weight with gestational age
+* mom's race with smoking
+
 ```{r}
-birthweight_3 = lm(bwt ~ babysex + bhead + blength + delwt + gaweeks + mrace + smoken + ppbmi, data = birthweight_data)
+birthweight_3 = lm(bwt ~ babysex + bhead * blength + delwt * gaweeks + mrace * smoken + ppbmi, data = birthweight_data)
 
 birthweight_3_tidy = birthweight_3 %>% 
   broom::tidy() %>% 
@@ -191,28 +200,45 @@ birthweight_3_tidy = birthweight_3 %>%
 birthweight_3_tidy
 ```
 
-ppbmi and ppwt seem to not be significant when the other is in the model. I'm considering ppbmi more important.
+Only the interaction between head circumference and length at birth seemed significant.
+
+```{r}
+birthweight_4 = lm(bwt ~ babysex + bhead * blength + delwt + gaweeks + mrace + smoken + ppbmi, data = birthweight_data)
+
+birthweight_4_tidy = birthweight_4 %>% 
+  broom::tidy() %>% 
+  select(term, estimate, p.value) %>% 
+  knitr::kable(digits = 3)
+
+birthweight_4_tidy
+```
 
 Comparing nested models - the full to the new one:
 
 ```{r}
-anova(birthweight_3, birthweight_full) %>% 
+anova(birthweight_4, birthweight_full) %>% 
   broom::tidy()
 ```
+
+My proposed model doesn't seem to be significantly different from the full one, but it does have less variables, indicating more parity for similar results.
+
+Graphing the residuals and predictions of the proposed regression model:
 
 ```{r}
 birthweight_data %>% 
   modelr::add_residuals(birthweight_3) %>% 
   modelr::add_predictions(birthweight_3) %>% 
-  ggplot(aes(x = bwt, y = resid)) +  
+  gather(key = diagnostics, value = value, resid:pred) %>% 
+  ggplot(aes(x = bwt, y = value, color = diagnostics)) + 
   geom_point() +
-  geom_line(aes(y = pred), color = "red") +
   labs(
     title = "Predictions and Residuals",
     x = "Birthweight",
     y = "Predictions and Residuals"
-  )
+  ) 
 ```
+
+The predictions show a positive, linear trend, indicating that the model is predicting similar birthweights to the actual birthweight data. The residuals are all basically centered around 0, indicating not too much prediction errors.
 
 Compare your model to two others:
 
@@ -220,6 +246,10 @@ Compare your model to two others:
 * One using head circumference, length, sex, and all interactions (including the three-way interaction) between these
 
 Make this comparison in terms of the cross-validated prediction error; use crossv_mc and functions in purrr as appropriate.
+
+* Created a cross-validation training and testing sets
+* Fit my proposed model and the two comparison models to the training sets and then validated using the testing sets
+* Took a look at the generated RSMEs for each model
 
 ```{r}
 cv_birthweight = crossv_mc(birthweight_data, 100)
@@ -236,13 +266,20 @@ cv_birthweight =
     rmse_circ_length_sex = map2_dbl(circ_length_sex_mod, test, ~rmse(model = .x, data = .y)))
 ```
 
+Model RMSEs:
+
 ```{r}
 cv_birthweight %>% 
   select(starts_with("rmse")) %>% 
   gather(key = model, value = rmse) %>% 
   mutate(model = str_replace(model, "rmse_", ""),
          model = fct_inorder(model)) %>% 
-  ggplot(aes(x = model, y = rmse)) + geom_violin()
+  ggplot(aes(x = model, y = rmse, fill = model)) + geom_violin() +
+  labs(
+    title = "RMSEs by Model",
+    x = "Model",
+    y = "RMSE"
+  )
 ```
 
-
+It appears that my proposed model has the lowest root mean square error of all the models, indicating that this one has the lowest average prediction error. This could mean that this model has performed the best, although whether this difference in performance is statistically significant has not been tested. 
