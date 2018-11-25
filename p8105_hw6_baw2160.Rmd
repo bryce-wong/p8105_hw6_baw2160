@@ -27,6 +27,7 @@ Loading the data:
 * Modifiy victim_race to have categories white and non-white, with white as the reference category. 
     * All "unknown" values are "non-white" values with the recoding
 * Be sure that victim_age is numeric.
+    * Removing all "NA" observations for victim_age
 
 ```{r}
 hom_data_tidied = hom_data %>% 
@@ -36,11 +37,12 @@ hom_data_tidied = hom_data %>%
          victim_age = as.numeric(victim_age),
          victim_race = ifelse(victim_race == "White", "white", "non-white"),
          victim_race = fct_relevel(victim_race, "white")) %>% 
+  filter(!is.na(victim_age)) %>% 
   select(city_state, resolved, victim_age, victim_race, disposition, everything())
 ```
 
 * For the city of Baltimore, MD, use the glm function to fit a logistic regression with resolved vs unresolved as the outcome and victim age, sex and race (as just defined) as predictors. 
-* Save the output of glm as an R object; apply the broom::tidy to this object; and obtain the estimate and confidence interval of the adjusted odds ratio for solving homicides comparing black victims to white victims keeping all other variables fixed.
+* Save the output of glm as an R object; apply the broom::tidy to this object; and obtain the estimate and confidence interval of the adjusted odds ratio for solving homicides comparing non-white victims to white victims keeping all other variables fixed.
 
 ```{r}
 baltimore_glm = 
@@ -82,7 +84,7 @@ glm_function = function(data, name){
 }
 ```
 
-```{r}
+```{r, warning = FALSE}
 all_cities_glm = hom_data_tidied %>% 
   nest(resolved:lon) %>% 
   mutate(
@@ -92,8 +94,10 @@ all_cities_glm = hom_data_tidied %>%
   unnest()
 ```
 
+There seems to be an issue wherein fitted probabilities 0 or 1 occurred, meaning that there is a variable that is creating perfect separation in the dependent variable. This might mean that complete regression isn't the best model for this dataset, and that model values may be inflated.
+
 * Create a plot that shows the estimated ORs and CIs for each city. 
-* Organize cities according to estimated OR, and comment on the plot.
+* Organize cities according to estimated OR
 
 ```{r}
 all_cities_glm %>%
@@ -111,7 +115,7 @@ all_cities_glm %>%
 
 We can see from this plot that the city with the highest odds ratio for solving homicides comparing non-white to white victims is Tampa, FL, and the city with the lowest odds ratio for solving homicides with this same comparison is Boston, MA.
 
-Most cities seem to have roughly the same odds ratio, as all points are on a roughly flat line. The error bars do seem to vary widely, however. On the whole, most odds ratios are below 1, indicating that the odds of solving homicides with non-white victims is often lower than the odds of solving homicides with white victims. 
+Most cities seem to have roughly the same odds ratio, as all points are on a roughly flat line. The error bars do seem to vary widely, however. This is especially true for the cities with the highest odds ratios - possibly meaning that the homicides in these cities don't necessarily have similar solving odds between non-whites and whites. Rather, the solving odds differ widely, so average out to a ratio of around 1. On the whole, most odds ratios are below 1, indicating that the odds of solving homicides with non-white victims is often lower than the odds of solving homicides with white victims. 
 
 ###Problem 2:
 
@@ -147,6 +151,7 @@ birthweight_full_tidy
 ```
 
 Here are the variables that weren't statistically significant when they were a part of the full model:
+
 * fincome
 * frace2-frace8 (missing frace5-7)
 * malform1
@@ -157,9 +162,9 @@ Here are the variables that weren't statistically significant when they were a p
 * parity
 * ppbmi
 * ppwt
-* smoken
 
 N/A - might mean these variables aren't linearly independent:
+
 * pnumlbw
 * pnumsga
 * wtgain
@@ -167,7 +172,7 @@ N/A - might mean these variables aren't linearly independent:
 I removed these variables and fit a new regression model:
 
 ```{r}
-birthweight_2 = lm(bwt ~ babysex + bhead + blength + delwt + gaweeks + mrace, data = birthweight_data)
+birthweight_2 = lm(bwt ~ babysex + bhead + blength + delwt + gaweeks + mrace + smoken, data = birthweight_data)
 
 birthweight_2_tidy = birthweight_2 %>% 
   broom::tidy() %>% 
@@ -178,19 +183,22 @@ birthweight_2_tidy
 ```
 
 I decided to then add back in variables I think make theoretical sense:
-* smoken
+
 * ppwt
 * ppbmi
 
-Looking at ppbmi and ppwt, each seems to not be significant when the other is in the model. I'm considering ppbmi more important, so I remove ppwt from the model.
+Looking at ppbmi and ppwt, each seems to not be significant when the other is in the model. They are also both non-significant when testing for an interaction between the two. I'm considering ppbmi more important, so I remove ppwt from the model. This is because BMI may be a more accurate measurement of one's health than simply weight (although BMI can be potentially problematic as well).
 
-Testing for possible interactions:
+Testing for possible interactions (including some previously excluded variables in case they become statistically significant in the model when included in an interaction):
+
 * head circumference with length at birth
 * delivery weight with gestational age
 * mom's race with smoking
+* mom's race and income
+* father's race and income
 
 ```{r}
-birthweight_3 = lm(bwt ~ babysex + bhead * blength + delwt * gaweeks + mrace * smoken + ppbmi, data = birthweight_data)
+birthweight_3 = lm(bwt ~ babysex + bhead * blength + delwt * gaweeks + mrace * smoken + ppbmi + mrace * fincome + frace * fincome, data = birthweight_data)
 
 birthweight_3_tidy = birthweight_3 %>% 
   broom::tidy() %>% 
@@ -200,10 +208,10 @@ birthweight_3_tidy = birthweight_3 %>%
 birthweight_3_tidy
 ```
 
-Only the interaction between head circumference and length at birth seemed significant.
+Only the interaction between head circumference and length at birth seemed significant - length seemed non-significant on it's own at this point.
 
 ```{r}
-birthweight_4 = lm(bwt ~ babysex + bhead * blength + delwt + gaweeks + mrace + smoken + ppbmi, data = birthweight_data)
+birthweight_4 = lm(bwt ~ babysex + bhead + bhead:blength + delwt + gaweeks + mrace + smoken + ppbmi, data = birthweight_data)
 
 birthweight_4_tidy = birthweight_4 %>% 
   broom::tidy() %>% 
@@ -220,7 +228,7 @@ anova(birthweight_4, birthweight_full) %>%
   broom::tidy()
 ```
 
-My proposed model doesn't seem to be significantly different from the full one, but it does have less variables, indicating more parity for similar results.
+My proposed model doesn't seem to be significantly different from the full one, which means my proposed model is not necessarily the best model. 
 
 Graphing the residuals and predictions of the proposed regression model:
 
@@ -238,16 +246,16 @@ birthweight_data %>%
   ) 
 ```
 
-The predictions show a positive, linear trend, indicating that the model is predicting similar birthweights to the actual birthweight data. The residuals are all basically centered around 0, indicating not too much prediction errors.
+The predictions show a positive, linear trend, indicating that the model is predicting similar birthweights to the actual birthweight data. The residuals are all basically centered around 0, indicating not too much prediction errors. However, the spread is pretty wide around this 0, so it's likely this is not the most accurate of predictive models.
 
-Compare your model to two others:
+Comparing my proposed model to two others:
 
 * One using length at birth and gestational age as predictors (main effects only)
 * One using head circumference, length, sex, and all interactions (including the three-way interaction) between these
 
-Make this comparison in terms of the cross-validated prediction error; use crossv_mc and functions in purrr as appropriate.
+The comparison is done below:
 
-* Created a cross-validation training and testing sets
+* Created cross-validation training and testing sets
 * Fit my proposed model and the two comparison models to the training sets and then validated using the testing sets
 * Took a look at the generated RSMEs for each model
 
@@ -266,7 +274,7 @@ cv_birthweight =
     rmse_circ_length_sex = map2_dbl(circ_length_sex_mod, test, ~rmse(model = .x, data = .y)))
 ```
 
-Model RMSEs:
+Modelling the RMSEs:
 
 ```{r}
 cv_birthweight %>% 
