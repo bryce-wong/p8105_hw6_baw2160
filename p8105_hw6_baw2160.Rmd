@@ -290,3 +290,5 @@ cv_birthweight %>%
 ```
 
 It appears that my proposed model has the lowest root mean square error of all the models, indicating that this one has the lowest average prediction error. This could mean that this model has performed the best, although whether this difference in performance is statistically significant has not been tested. 
+
+It should be noted that all these models are linear models, which may be imperfect because the data may not follow a linear pattern.
