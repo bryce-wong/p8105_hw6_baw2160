@@ -150,7 +150,7 @@ birthweight_full_tidy = birthweight_full %>%
 birthweight_full_tidy
 ```
 
-Here are the variables that weren't statistically significant when they were a part of the full model:
+Here are the variables that weren't statistically significant when all other predictors were included in the full model:
 
 * fincome
 * frace2-frace8 (missing frace5-7)
@@ -163,7 +163,7 @@ Here are the variables that weren't statistically significant when they were a p
 * ppbmi
 * ppwt
 
-N/A - might mean these variables aren't linearly independent:
+These variables had N/A estimates - might mean these variables aren't linearly independent:
 
 * pnumlbw
 * pnumsga
@@ -187,7 +187,7 @@ I decided to then add back in variables I think make theoretical sense:
 * ppwt
 * ppbmi
 
-Looking at ppbmi and ppwt, each seems to not be significant when the other is in the model. They are also both non-significant when testing for an interaction between the two. I'm considering ppbmi more important, so I remove ppwt from the model. This is because BMI may be a more accurate measurement of one's health than simply weight (although BMI can be potentially problematic as well).
+Looking at ppbmi and ppwt, each seems to not be significant when the other is in the model. They are also both non-significant when testing for an interaction between the two. I'm considering ppbmi more important, so I remove ppwt from the model. This is because BMI may be a more accurate measurement of one's health than simply weight (although BMI can be potentially problematic as well). The idea is that health of the mother may influence birthweight of the baby.
 
 Testing for possible interactions (including some previously excluded variables in case they become statistically significant in the model when included in an interaction):
 
@@ -208,27 +208,27 @@ birthweight_3_tidy = birthweight_3 %>%
 birthweight_3_tidy
 ```
 
-Only the interaction between head circumference and length at birth seemed significant - length seemed non-significant on it's own at this point.
+Only the interaction between head circumference and length at birth seemed significant - length seemed non-significant on it's own at this point (thus, I excluded it in the final proposed model).
 
 ```{r}
-birthweight_4 = lm(bwt ~ babysex + bhead + bhead:blength + delwt + gaweeks + mrace + smoken + ppbmi, data = birthweight_data)
+birthweight_final = lm(bwt ~ babysex + bhead + bhead:blength + delwt + gaweeks + mrace + smoken + ppbmi, data = birthweight_data)
 
-birthweight_4_tidy = birthweight_4 %>% 
+birthweight_final_tidy = birthweight_final %>% 
   broom::tidy() %>% 
   select(term, estimate, p.value) %>% 
   knitr::kable(digits = 3)
 
-birthweight_4_tidy
+birthweight_final_tidy
 ```
 
 Comparing nested models - the full to the new one:
 
 ```{r}
-anova(birthweight_4, birthweight_full) %>% 
+anova(birthweight_final, birthweight_full) %>% 
   broom::tidy()
 ```
 
-My proposed model doesn't seem to be significantly different from the full one, which means my proposed model is not necessarily the best model. 
+My proposed model doesn't seem to be significantly different from the full one, which means my proposed model is not necessarily the best model. It could be that some variables excluded from the model were significant if there were a different combination of additional predictors already included. It could also be that some variables included in the model would not have been significant if the right combination of other predictors were included in the model.
 
 Graphing the residuals and predictions of the proposed regression model:
 
@@ -236,17 +236,16 @@ Graphing the residuals and predictions of the proposed regression model:
 birthweight_data %>% 
   modelr::add_residuals(birthweight_3) %>% 
   modelr::add_predictions(birthweight_3) %>% 
-  gather(key = diagnostics, value = value, resid:pred) %>% 
-  ggplot(aes(x = bwt, y = value, color = diagnostics)) + 
+  ggplot(aes(x = pred, y = resid)) + 
   geom_point() +
   labs(
-    title = "Predictions and Residuals",
-    x = "Birthweight",
-    y = "Predictions and Residuals"
+    title = "Residuals vs Fitted Values",
+    x = "Fitted Values",
+    y = "Residuals"
   ) 
 ```
 
-The predictions show a positive, linear trend, indicating that the model is predicting similar birthweights to the actual birthweight data. The residuals are all basically centered around 0, indicating not too much prediction errors. However, the spread is pretty wide around this 0, so it's likely this is not the most accurate of predictive models.
+The residuals do not seem to be randomly scattered about the 0 line, indicating that we are not sure whether the assumption of linearity is met, or if the variances of the error terms are equal. Additionally, there appear to be a few outliers in the scatterplot. Overall, it's likely that this is not the most accurate of predictive models.
 
 Comparing my proposed model to two others:
 
